@@ -13,7 +13,7 @@ struct geoData {
 
 int intFx(unsigned ndim, const double *zs, void *fdata, unsigned fdim, double *fval) {
 	geoData *f = (geoData *) fdata;
-	*fval = flux(f->g, f->l, f->s, f->zl, *zs, f->k0, f->kp, f->nHat);
+	*fval = flux(f->g, f->l, f->s, f->zl, f->k0, f->kp, f->nHat, *zs);
 	return 0;
 }
 
@@ -21,7 +21,7 @@ double fluxZInt(mlgeo *g, int l, int s, double zl, double k0, double kp, double 
 	int res;
 	unsigned fdim = 1, dim = 1;
 	double xmin = 0, xmax = g->d[s-1], val, err; // s cannot equal 0 or N 
-	double absError = 0, relError = 1e-4;
+	double absError = 0, relError = 1e-6;
 	size_t maxEval = 1e5;
 	geoData fdata = {g, l, s, zl, k0, kp, nHat};
 	res = pcubature(fdim, intFx, &fdata, dim, &xmin, &xmax, maxEval, 

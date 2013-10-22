@@ -57,9 +57,42 @@ int main() {
 	initGeo(epsV, d, numLayers-1, g);
 	printGeo(g);
 
-	double h = flux(g, 2, 3, 0.05, 0.005, k0, kp, -1.);
-	std::cout << "\nflux: " << h << std::endl;
+	SMatrix *S = new SMatrix(g, k0, kp);
+	//S->printSMatrix();
+
+	pwaves p0e, p2e, p0h, p2h;
+	pWavesL(S, 0, 1, TE, p0e);
+	pWavesL(S, 2, 1, TE, p2e);
+	pWavesL(S, 0, 1, TM, p0h);
+	pWavesL(S, 2, 1, TM, p2h);
+
+/*	std::cout << "FIELDS IN LAYER 0" << std::endl;
+	gfFlux(S, g, p0e, p0h, 0, 1, -0.1, 0.05);
+	std::cout << "A.h0: " << p0h.Al << "  B.h0: " << p0h.Bl << "  C.h0" << p0h.Cl 
+		<< "  D.h0: " << p0h.Dl << std::endl;
+	std::cout << "A.e0: " << p0e.Al << "  B.e0: " << p0e.Bl << "  C.e0" << p0e.Cl 
+		<< "  D.e0: " << p0e.Dl << std::endl;
+	std::cout << "\n\n" << std::endl;
+
+	std::cout << "FIELDS IN LAYER 2" << std::endl;
+	gfFlux(S, g, p2e, p2h, 2, 1, 0.1, 0.05);
+	std::cout << "A.h2: " << p2h.Al << "  B.h2: " << p2h.Bl << "  C.h2" << p2h.Cl 
+		<< "  D.h2: " << p2h.Dl << std::endl;
+	std::cout << "A.e2: " << p2e.Al << "  B.e2: " << p2e.Bl << "  C.e2" << p2e.Cl 
+		<< "  D.e2: " << p2e.Dl << std::endl;
+	std::cout << "\n\n" << std::endl;
+*/
+	double h = flux(g, 2, 3, 0.05, k0, kp, -1., 0.005);
+	std::cout << "\nflux from zs=0.005: " << h << std::endl;
+	
+	double h2 = flux(g, 2, 1, 0.05, k0, kp, 1., 0.005);
+	std::cout << "\nflux from zs=0.005: " << h2 << std::endl;
 
 	// test numerical integration
+	std::cout << "\nEntering numerical integration procedure:" << std::endl;
 	fluxZInt(g, 2, 3, 0.05, k0, kp, -1.);
+	
+	// test analytical integral
+	h2 = flux(g, 2, 3, 0.05, k0, kp, -1.);
+	std::cout << "\nflux from all of s: " << h2 << std::endl;
 }

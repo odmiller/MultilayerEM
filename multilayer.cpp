@@ -6,6 +6,8 @@
 
 typedef std::complex<double> cdouble;
 const cdouble II(0.,1.);
+using std::conj;
+using std::real;
 
 // for given stack (sMatrix:S,kz,k), compute flux at zl (in layer l) from 
 // emitter at zs (in layer s, with permittivity epsS), for k0 and kp (in S)
@@ -45,10 +47,11 @@ void pWavesL(const SMatrix *S, int l, int s, int pol, pwaves &p) {
 	}
 }
 
-// flux from zs to zl for given geometry (g) and kp, k0 (S)
+// flux from s to zl for given geometry (g) and kp, k0 (S)
+// either from a single zs, or from entire s layer
 //   nHat = 1. or -1.
-double flux(const mlgeo *g, int l, int s, double zl, double zs, 
-	double k0, double kp, double nHat) {
+double flux(const mlgeo *g, int l, int s, double zl,  
+	double k0, double kp, double nHat, double zs) {
 	if (g->eps[s].imag() == 0)
 		return 0;
 
@@ -58,13 +61,98 @@ double flux(const mlgeo *g, int l, int s, double zl, double zs,
 	SMatrix *S = new SMatrix(g, k0, kp);
 	pWavesL(S, l, s, TE, pTE); 	
 	pWavesL(S, l, s, TM, pTM);
-	hgf = gfFlux(S, g, pTE, pTM, l, s, zl, zs);
+	if(zs<0) // not allowed otherwise (use to signify layer calc - default val=-1)
+		hgf = gfFlux(S, pTE, pTM, l, s, zl, g->d[s-1]);
+	else
+		hgf = gfFluxSP(S, pTE, pTM, l, s, zl, zs);
 	delete S;
-	return nHat * std::real( S->k0 * S->k0 * II * g->eps[s].imag() * hgf / (M_PI * M_PI) );
+	return nHat * real( S->k0 * S->k0 * II * imag(g->eps[s]) * hgf / (M_PI * M_PI) );
 }
 
-// Green's functions contribution to flux
-cdouble gfFlux(const SMatrix *S, const mlgeo *g, const pwaves &pTE, const pwaves &pTM, 
+cdouble zsInt(int s1, int s2, cdouble kzs, double ds) {
+	if(s1==1 && s2==1)
+		return (exp(2. * II * real(kzs) * ds) - 1.) / (2. * II * real(kzs));
+	else if(s1==1 && s2==-1)
+		return (1. - exp(-2. * imag(kzs) * ds)) / (2. * imag(kzs));
+	else if(s1==-1 && s2==1)
+		return (exp(2. * imag(kzs) * ds) - 1.) / (2. * imag(kzs));
+	else if(s1==-1 && s2==-1)
+		return (1. - exp(-2. * II * real(kzs) * ds)) / (2. * II * real(kzs));
+	return -1; // shouldn't get here
+}
+
+// Green's functions contributions to flux, entire s layers
+// integral over emitter layer done analytically
+cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM, 
+	int l, int s, double zl, double ts) {
+
+	cdouble xl, xs, Ae, Am, Be, Bm, Ce, Cm, De, Dm;
+	cdouble gEpp[4], gEpz[4], gEtt[4], gHpt[4], gHtp[4], gHtz[4]; // gEzp, gEzz, gHzt
+
+	const cdouble &kzl = S->kz[l];
+	const cdouble &kzs = S->kz[s];
+	const cdouble &kl = S->k[l];
+	const cdouble &ks = S->k[s];
+	const cdouble &kp = S->kp;
+	xl = II * kzl * zl; 
+
+	Ae = pTE.Al * exp(xl);
+	Be = pTE.Bl * exp(-xl);
+	Ce = pTE.Cl * exp(xl);
+	De = pTE.Dl * exp(-xl);
+	Am = pTM.Al * exp(xl);
+	Bm = pTM.Bl * exp(-xl);
+	Cm = pTM.Cl * exp(xl);
+	Dm = pTM.Dl * exp(-xl);
+
+	cdouble f = 0;
+	int gES[4] = {-1,-1,+1,+1};
+	int gHS[4] = {+1,+1,-1,-1};
+
+	// TM (1)
+	gEpp[0] = II * kzl * kp / (2. * ks * kl) * Am;
+	gEpp[1] = II * kzl * kp / (2. * ks * kl) * (-Bm);
+	gEpp[2] = II * kzl * kp / (2. * ks * kl) * (-Cm);
+	gEpp[3] = II * kzl * kp / (2. * ks * kl) * Dm;
+	gHtp[0] = kl / (2. * ks) * (-Am);
+	gHtp[1] = kl / (2. * ks) * (-Bm);
+	gHtp[2] = kl / (2. * ks) * Cm;
+	gHtp[3] = kl / (2. * ks) * Dm;
+	for(int i=0; i<4; ++i)
+		for(int j=0; j<4; ++j)
+			f += gEpp[i] * conj(gHtp[j]) * zsInt(gES[i], gHS[j], kzs, ts); 
+
+	// TM (2)
+	gEpz[0] = II * kzl * kp * kp / (2. * kzs * ks * kl) * (-Am);
+	gEpz[1] = II * kzl * kp * kp / (2. * kzs * ks * kl) * Bm;
+	gEpz[2] = II * kzl * kp * kp / (2. * kzs * ks * kl) * (-Cm);
+	gEpz[3] = II * kzl * kp * kp / (2. * kzs * ks * kl) * Dm;
+	gHtz[0] = kl * kp / (2. * ks * kzs) * Am;
+	gHtz[1] = kl * kp / (2. * ks * kzs) * Bm;
+	gHtz[2] = kl * kp / (2. * ks * kzs) * Cm;
+	gHtz[3] = kl * kp / (2. * ks * kzs) * Dm;
+	for(int i=0; i<4; ++i)
+		for(int j=0; j<4; ++j)
+			f += gEpz[i] * conj(gHtz[j]) * zsInt(gES[i], gHS[j], kzs, ts);
+
+	// TE pol: note the overall neg. sign below
+	gEtt[0] = II * kp / (2. * kzs) * Ae;
+	gEtt[1] = II * kp / (2. * kzs) * Be;
+	gEtt[2] = II * kp / (2. * kzs) * Ce;
+	gEtt[3] = II * kp / (2. * kzs) * De;
+	gHpt[0] = kzl / (2. * kzs) * Ae;
+	gHpt[1] = kzl / (2. * kzs) * (-Be);
+	gHpt[2] = kzl / (2. * kzs) * Ce;
+	gHpt[3] = kzl / (2. * kzs) * (-De);
+	for(int i=0; i<4; ++i)
+		for(int j=0; j<4; ++j)
+			f -= gEtt[i] * conj(gHpt[j]) * zsInt(gES[i], gHS[j], kzs, ts);
+
+	return f;
+}
+
+// Green's functions contribution to flux, from single zs in s
+cdouble gfFluxSP(const SMatrix *S, const pwaves &pTE, const pwaves &pTM, 
 	int l, int s, double zl, double zs) {
 			
 	cdouble xl, xs, Ae, Am, Be, Bm, Ce, Cm, De, Dm;
@@ -76,16 +164,17 @@ cdouble gfFlux(const SMatrix *S, const mlgeo *g, const pwaves &pTE, const pwaves
 	const cdouble &ks = S->k[s];
 	const cdouble &kp = S->kp;
 	xl = II * kzl * zl; 
-	xs = II * kzs * (zs + g->z[s]); // abs, not rel pos.
+	xs = II * kzs * zs; 
+	//xs = II * kzs * (zs + g->z[s]); // abs, not rel pos.
 
 	Ae = pTE.Al * exp(xl-xs);
 	Be = pTE.Bl * exp(-xl-xs);
 	Ce = pTE.Cl * exp(xl+xs);
-	De = pTE.Dl * exp(xl-xs);
+	De = pTE.Dl * exp(-xl+xs);
 	Am = pTM.Al * exp(xl-xs);
 	Bm = pTM.Bl * exp(-xl-xs);
 	Cm = pTM.Cl * exp(xl+xs);
-	Dm = pTM.Dl * exp(xl-xs);
+	Dm = pTM.Dl * exp(-xl+xs);
 	
 	// electric dyadic Green's functions
 	// NOTE: extra factor of kp (elsewhere in Francoeur Eqn.) to make g's unitless
@@ -101,6 +190,6 @@ cdouble gfFlux(const SMatrix *S, const mlgeo *g, const pwaves &pTE, const pwaves
 	gHtz = kl * kp / (2. * ks * kzs) * ( Am + Bm + Cm + Dm );
 	//gHzt = kp / (2. * kzs) * ( -Ae - Be - Ce - De );
 
-	return gEpp*std::conj(gHtp) + gEpz*std::conj(gHtz) - gEtt*std::conj(gHpt);
+	return gEpp*conj(gHtp) + gEpz*conj(gHtz) - gEtt*conj(gHpt);
 }
 
