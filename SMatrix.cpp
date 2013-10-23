@@ -160,6 +160,12 @@ void SMatrix::printSMatrix() {
 	}
 }
 
+mlgeo::~mlgeo() {
+	delete[] d;
+	delete[] eps;
+	delete[] z;
+}
+
 void initGeo(const cdouble *epsIn, const double *dIn, int N, mlgeo *g) {
 	// create new copies
 	cdouble *eps = new cdouble[N+1];

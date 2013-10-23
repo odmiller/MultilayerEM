@@ -9,6 +9,7 @@ struct mlgeo {
 	double *d;
 	double *z;
 	int N;
+	~mlgeo();
 };
 
 const int TE = 1;
