@@ -21,7 +21,6 @@ using std::real;
 //   should have update() function for S-Matrix
 //   Splus and Sminus taken out, inserted in flux eqn. (as in Ref.)
 void pWavesL(const SMatrix *S, int l, int s, int pol, pwaves &p) {
-	
 	cdouble As, AN, B0, Bs, Cs, CN, D0, Ds;
 	int N = S->N;
 
@@ -61,12 +60,13 @@ double flux(const mlgeo *g, int l, int s, double zl,
 	SMatrix *S = new SMatrix(g, k0, kp);
 	pWavesL(S, l, s, TE, pTE); 	
 	pWavesL(S, l, s, TM, pTM);
+
 	if(zs<0) // not allowed otherwise (use to signify layer calc - default val=-1)
 		hgf = gfFlux(S, pTE, pTM, l, s, zl, g->d[s-1]);
 	else
 		hgf = gfFluxSP(S, pTE, pTM, l, s, zl, zs);
 	delete S;
-	return nHat * real( S->k0 * S->k0 * II * imag(g->eps[s]) * hgf / (M_PI * M_PI) );
+	return nHat * real( k0 * k0 * II * imag(g->eps[s]) * hgf / (M_PI * M_PI) );
 }
 
 cdouble zsInt(int s1, int s2, cdouble kzs, double ds) {
@@ -81,6 +81,7 @@ cdouble zsInt(int s1, int s2, cdouble kzs, double ds) {
 	return -1; // shouldn't get here
 }
 
+// Should split this up into TE/TM (also merge with non-integrated version)
 // Green's functions contributions to flux, entire s layers
 // integral over emitter layer done analytically
 cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM, 
@@ -105,11 +106,12 @@ cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	Cm = pTM.Cl * exp(xl);
 	Dm = pTM.Dl * exp(-xl);
 
-	cdouble f = 0;
+	cdouble fTM1 = 0, fTM2 = 0, fTE = 0;
 	int gES[4] = {-1,-1,+1,+1};
 	int gHS[4] = {+1,+1,-1,-1};
 
 	// TM (1)
+	//std::cout << "kzl*kp/ks*ks " << kzl*kp/(ks*ks) << std::endl;
 	gEpp[0] = II * kzl * kp / (2. * ks * kl) * Am;
 	gEpp[1] = II * kzl * kp / (2. * ks * kl) * (-Bm);
 	gEpp[2] = II * kzl * kp / (2. * ks * kl) * (-Cm);
@@ -120,7 +122,7 @@ cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	gHtp[3] = kl / (2. * ks) * Dm;
 	for(int i=0; i<4; ++i)
 		for(int j=0; j<4; ++j)
-			f += gEpp[i] * conj(gHtp[j]) * zsInt(gES[i], gHS[j], kzs, ts); 
+			fTM1 += gEpp[i] * conj(gHtp[j]) * zsInt(gES[i], gHS[j], kzs, ts); 
 
 	// TM (2)
 	gEpz[0] = II * kzl * kp * kp / (2. * kzs * ks * kl) * (-Am);
@@ -133,7 +135,7 @@ cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	gHtz[3] = kl * kp / (2. * ks * kzs) * Dm;
 	for(int i=0; i<4; ++i)
 		for(int j=0; j<4; ++j)
-			f += gEpz[i] * conj(gHtz[j]) * zsInt(gES[i], gHS[j], kzs, ts);
+			fTM2 += gEpz[i] * conj(gHtz[j]) * zsInt(gES[i], gHS[j], kzs, ts);
 
 	// TE pol: note the overall neg. sign below
 	gEtt[0] = II * kp / (2. * kzs) * Ae;
@@ -146,9 +148,9 @@ cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	gHpt[3] = kzl / (2. * kzs) * (-De);
 	for(int i=0; i<4; ++i)
 		for(int j=0; j<4; ++j)
-			f -= gEtt[i] * conj(gHpt[j]) * zsInt(gES[i], gHS[j], kzs, ts);
+			fTE -= gEtt[i] * conj(gHpt[j]) * zsInt(gES[i], gHS[j], kzs, ts);
 
-	return f;
+	return fTM1+fTM2+fTE;
 }
 
 // Green's functions contribution to flux, from single zs in s
@@ -183,12 +185,14 @@ cdouble gfFluxSP(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	gEtt = II * kp / (2. * kzs) * ( Ae + Be + Ce + De );
 	//gEzp = II * kp * kp / (2. * ks * kl) * ( -Am - Bm + Cm + Dm );
 	//gEzz = II * kp * kp * kp / (2. * ksz * ks * kl) * ( Am + Bm + Cm + Dm );
+	//std::cout << gEpp << " " << gEpz << " " << gEtt << std::endl;
 
 	// magnetic dyadic Green's functions
 	gHpt = kzl / (2. * kzs) * ( Ae - Be + Ce - De );
 	gHtp = kl / (2. * ks) * ( -Am - Bm + Cm + Dm ); 
 	gHtz = kl * kp / (2. * ks * kzs) * ( Am + Bm + Cm + Dm );
 	//gHzt = kp / (2. * kzs) * ( -Ae - Be - Ce - De );
+	//std::cout << gHpt << " " << gHtp << " " << gHtz << " " << std::endl;
 
 	return gEpp*conj(gHtp) + gEpz*conj(gHtz) - gEtt*conj(gHpt);
 }

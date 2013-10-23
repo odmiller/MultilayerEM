@@ -20,8 +20,8 @@ int main() {
 	//   eps0 || eps1,d1 || eps2,d2 || ... || epsInt,di || ... || eps1,d1 || epsN
 	const int numLayersPerMat = 1;  // odd, for mirror symmetry
 	const epsfn eps0 = epsVac;
-    const epsfn eps1 = epsAu;
-	const epsfn eps2 = [=] (double d)  { return epsConst(d,3.9); }; // SiO2=3.9
+    const epsfn eps1 = epsCBN;
+	const epsfn eps2 = epsVac; //[=] (double d)  { return epsConst(d,3.9); }; // SiO2=3.9
 	const epsfn epsN = epsVac;
 	const epsfn epsInt = epsVac; // spacer layer
 	const double d1 = 0.010; // thickness of eps1 (um)
@@ -49,7 +49,8 @@ int main() {
 	double w, k0, kp;
 	w = 2*M_PI*3.e8/500e-9;
 	k0 = w/3.e14; // 1/um
-	kp = k0 * sin(M_PI/6);
+	//kp = k0 * sin(M_PI/6);
+	kp = k0 * 3;
 	for(int i=0; i<numLayers; ++i)
 		epsV[i] = eps[i](w);
 

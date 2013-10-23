@@ -2,7 +2,6 @@
 #include <iostream>
 #include <complex>
 #include "SMatrix.hpp"
-#include "materials.hpp"
 
 typedef std::complex<double> cdouble;
 typedef cdouble (*epsfn)(double);
@@ -60,7 +59,7 @@ void SMatrix::initMatrix(const cdouble *eps, const double *d) {
 	int m, n; // going to set S(0,n) and S(m,N), m=0:N,n=0:N
 
 	for(int pol=0; pol<2; ++pol) {
-		s = (pol==0) ? sTE : sTM;
+		s = (pol==TE) ? sTE : sTM;
 
 		// S(0,n) for n=0:N
 		m = 0;
@@ -71,13 +70,14 @@ void SMatrix::initMatrix(const cdouble *eps, const double *d) {
 		for(n=1; n<=N; ++n) { 
 			dl = (n>1) ? d[n-2] : 0;
 			k[n] = sqrt(eps[n]) * k0;
-			kz[n] = sqrt( k[n] * k[n] - kp * kp );
+			kz[n] = sqrt(k[n] * k[n] - kp * kp);
 			exp1 = exp(II*kz[n-1]*dl);
 			exp2 = exp(2.*II*kz[n-1]*dl);
 			reflTrans( eps[n-1], eps[n], kp/k0, pol, r, t );
 			
-			//printLayerInfo(n, eps[n], pol, r, t, exp1, exp2, kp, kz);
-
+			//std::cout << "[SMatrix]: " << m << " " << n << " " << r << " " << t 
+				//<< exp1 << " " << exp2 << " " << s[ind11(m,n-1)] << " " 
+				//<< s[ind12(m,n-1)] << std::endl;
 			s[ind11(m,n)] = ( s[ind11(m,n-1)] * t * exp1 )
 					/ ( 1. - s[ind12(m,n-1)] * r * exp2 ); 
 			s[ind12(m,n)] = ( s[ind12(m,n-1)] * exp2 - r )
@@ -96,8 +96,6 @@ void SMatrix::initMatrix(const cdouble *eps, const double *d) {
 			exp2 = exp(2.*II*kz[m-1]*dl);
 			reflTrans( eps[m], eps[m-1], kp/k0, pol, r, t );
 			
-			//printLayerInfo(m, eps[m], pol, r, t, exp1, exp2, kp, kz);
-
 			s[ind11(m-1,n)] = s[ind11(m,n)] * exp1 * (1. - r*r) /( t*(1.-r*s[ind21(m,n)]) );
 			s[ind12(m-1,n)] = s[ind12(m,n)] + r * s[ind11(m,n)] * s[ind22(m,n)] 
 							/ ( 1. - r*s[ind21(m,n)] );
@@ -135,6 +133,33 @@ cdouble SMatrix::S22(int a, int b, int pol) const {
 		return sTE[ind22(a,b)];
 }
 
+void SMatrix::printSMatrix() {
+	int ind0, ind1;
+	for(int pol=0; pol<=1; ++pol) {
+		std::cout << "-------" << std::endl;
+		if(pol==TE)
+			std::cout << "pol: " << "TE" << std::endl;
+		else
+			std::cout << "pol: " << "TM" << std::endl;
+		std::cout << "-------" << std::endl;
+		for(int ind=0; ind<=1; ++ind) {
+			for(int i=0; i<=N; ++i) {
+				ind0 = (ind==0) ? 0 : i;
+				ind1 = (ind==0) ? i : N;
+				std::cout << "layer: " << i << std::endl;
+				std::cout << "  s11(" << ind0 << "," << ind1 << "): " 
+					<< S11(ind0,ind1,pol) << std::endl;
+				std::cout << "  s12(" << ind0 << "," << ind1 << "): " 
+					<< S12(ind0,ind1,pol) << std::endl;
+				std::cout << "  s21(" << ind0 << "," << ind1 << "): " 
+					<< S21(ind0,ind1,pol) << std::endl;
+				std::cout << "  s22(" << ind0 << "," << ind1 << "): " 
+					<< S22(ind0,ind1,pol) << std::endl;
+			}
+		}
+	}
+}
+
 void initGeo(const cdouble *epsIn, const double *dIn, int N, mlgeo *g) {
 	// create new copies
 	cdouble *eps = new cdouble[N+1];
@@ -167,33 +192,6 @@ void printGeo(mlgeo *g) {
 			std::cout << "  z: " << g->z[i-1] << std::endl;
 	}
 	std::cout << "-------------------------" << std::endl;
-}
-
-void SMatrix::printSMatrix() {
-	int ind0, ind1;
-	for(int pol=0; pol<=1; ++pol) {
-		std::cout << "-------" << std::endl;
-		if(pol==TE)
-			std::cout << "pol: " << "TE" << std::endl;
-		else
-			std::cout << "pol: " << "TM" << std::endl;
-		std::cout << "-------" << std::endl;
-		for(int ind=0; ind<=1; ++ind) {
-			for(int i=0; i<=N; ++i) {
-				ind0 = (ind==0) ? 0 : i;
-				ind1 = (ind==0) ? i : N;
-				std::cout << "layer: " << i << std::endl;
-				std::cout << "  s11(" << ind0 << "," << ind1 << "): " 
-					<< S11(ind0,ind1,pol) << std::endl;
-				std::cout << "  s12(" << ind0 << "," << ind1 << "): " 
-					<< S12(ind0,ind1,pol) << std::endl;
-				std::cout << "  s21(" << ind0 << "," << ind1 << "): " 
-					<< S21(ind0,ind1,pol) << std::endl;
-				std::cout << "  s22(" << ind0 << "," << ind1 << "): " 
-					<< S22(ind0,ind1,pol) << std::endl;
-			}
-		}
-	}
 }
 
 /*
