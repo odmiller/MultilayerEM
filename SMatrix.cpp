@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include <complex>
+#include "mlgeo.hpp"
 #include "SMatrix.hpp"
 
 typedef std::complex<double> cdouble;
@@ -34,7 +35,7 @@ SMatrix::SMatrix(const mlgeo *g, double k0In, double kpIn)
 	: kz(new cdouble[g->N+1]), k(new cdouble[g->N+1]), kp(kpIn), k0(k0In), N(g->N),
 	sTE(new cdouble[4*(2*g->N+1)]), sTM(new cdouble[4*(2*g->N+1)]) // member init. list
 {
-	initMatrix(g->eps, g->d);
+	initMatrix(g);
 }
 
 // units of k0, kp, only matter relative to d (only m*d products ever used)
@@ -42,7 +43,9 @@ SMatrix::SMatrix(const cdouble *eps, const double *d, int NIn, double k0In, doub
 	: kz(new cdouble[N+1]), k(new cdouble[N+1]), kp(kpIn), k0(k0In), N(NIn),
 	sTE(new cdouble[4*(2*N+1)]), sTM(new cdouble[4*(2*N+1)]) // member init. list
 {
-	initMatrix(eps, d);
+	mlgeo *g = new mlgeo(eps, d, N);
+	initMatrix(g);
+	delete g;
 }
 
 // simple destructor
@@ -53,7 +56,7 @@ SMatrix::~SMatrix() {
 	delete[] sTM;
 }
 
-void SMatrix::initMatrix(const cdouble *eps, const double *d) {
+void SMatrix::initMatrix(const mlgeo *g) {
 	double dl;
 	cdouble exp1, exp2, r, t, *s;
 	int m, n; // going to set S(0,n) and S(m,N), m=0:N,n=0:N
@@ -65,15 +68,15 @@ void SMatrix::initMatrix(const cdouble *eps, const double *d) {
 		m = 0;
 		n = 0;
 		eyeS(s,ind11(m,n));
-		k[0] = sqrt(eps[0]) * k0;
+		k[0] = sqrt( g->eps(0) ) * k0;
 		kz[0] = sqrt( k[0]*k[0] - kp * kp );
 		for(n=1; n<=N; ++n) { 
-			dl = (n>1) ? d[n-2] : 0;
-			k[n] = sqrt(eps[n]) * k0;
+			dl = (n>1) ? g->d(n-1) : 0;
+			k[n] = sqrt( g->eps(n) ) * k0;
 			kz[n] = sqrt(k[n] * k[n] - kp * kp);
-			exp1 = exp(II*kz[n-1]*dl);
-			exp2 = exp(2.*II*kz[n-1]*dl);
-			reflTrans( eps[n-1], eps[n], kp/k0, pol, r, t );
+			exp1 = exp(II * kz[n-1] * dl);
+			exp2 = exp(2. * II * kz[n-1] * dl);
+			reflTrans( g->eps(n-1), g->eps(n), kp/k0, pol, r, t );
 			
 			//std::cout << "[SMatrix]: " << m << " " << n << " " << r << " " << t 
 				//<< exp1 << " " << exp2 << " " << s[ind11(m,n-1)] << " " 
@@ -91,10 +94,10 @@ void SMatrix::initMatrix(const cdouble *eps, const double *d) {
 		n = N;
 		eyeS(s,ind11(m,n));
 		for(m=N; m>1; --m) {  // m-1 is the new layer, from m
-			dl = (m>1) ? d[m-2] : 0;
+			dl = (m>1) ? g->d(m-1) : 0;
 			exp1 = exp(II*kz[m-1]*dl);
 			exp2 = exp(2.*II*kz[m-1]*dl);
-			reflTrans( eps[m], eps[m-1], kp/k0, pol, r, t );
+			reflTrans( g->eps(m), g->eps(m-1), kp/k0, pol, r, t );
 			
 			s[ind11(m-1,n)] = s[ind11(m,n)] * exp1 * (1. - r*r) /( t*(1.-r*s[ind21(m,n)]) );
 			s[ind12(m-1,n)] = s[ind12(m,n)] + r * s[ind11(m,n)] * s[ind22(m,n)] 
@@ -133,7 +136,7 @@ cdouble SMatrix::S22(int a, int b, int pol) const {
 		return sTE[ind22(a,b)];
 }
 
-void SMatrix::printSMatrix() {
+void SMatrix::print() {
 	int ind0, ind1;
 	for(int pol=0; pol<=1; ++pol) {
 		std::cout << "-------" << std::endl;
@@ -160,44 +163,21 @@ void SMatrix::printSMatrix() {
 	}
 }
 
-mlgeo::~mlgeo() {
-	delete[] d;
-	delete[] eps;
-	delete[] z;
+void eyeS(cdouble *S, int i) { // insert identity matrix
+	S[i+0] = 1; S[i+1] = 0;
+	S[i+2] = 0; S[i+3] = 1;
 }
-
-void initGeo(const cdouble *epsIn, const double *dIn, int N, mlgeo *g) {
-	// create new copies
-	cdouble *eps = new cdouble[N+1];
-	double *d = new double[N-1];
-	double *z = new double[N];
-	z[0] = 0.;
-	for(int i=0; i<=N; ++i) {
-		eps[i] = epsIn[i];
-		if(i<N-1)
-			d[i] = dIn[i];
-		if(i>0 && i<N)
-			z[i] = z[i-1] + d[i-1];
-	}
-	g->eps = eps;
-	g->d = d;
-	g->z = z;
-	g->N = N;
+int ind11(int a, int b) {
+	return 4*(a+b);
 }
-
-void printGeo(mlgeo *g) {
-	std::cout << "-------------------------" << std::endl;
-	std::cout << "Number of interfaces: " << g->N << std::endl;
-	std::cout << "Number of layers: " << g->N + 1 << std::endl;
-	for(int i=0; i<=g->N; ++i) {
-		std::cout << "layer: " << i << std::endl;
-		std::cout << "  eps: " << g->eps[i] << std::endl;
-		if(i>0 && i<g->N)
-			std::cout << "  d: " << g->d[i-1] << std::endl;
-		if(i>0)
-			std::cout << "  z: " << g->z[i-1] << std::endl;
-	}
-	std::cout << "-------------------------" << std::endl;
+int ind12(int a, int b) {
+	return 4*(a+b)+1;
+}
+int ind21(int a, int b) {
+	return 4*(a+b)+2;
+}
+int ind22(int a, int b) {
+	return 4*(a+b)+3;
 }
 
 /*
@@ -230,19 +210,3 @@ int main() {
 }
 */
 
-void eyeS(cdouble *S, int i) { // insert identity matrix
-	S[i+0] = 1; S[i+1] = 0;
-	S[i+2] = 0; S[i+3] = 1;
-}
-int ind11(int a, int b) {
-	return 4*(a+b);
-}
-int ind12(int a, int b) {
-	return 4*(a+b)+1;
-}
-int ind21(int a, int b) {
-	return 4*(a+b)+2;
-}
-int ind22(int a, int b) {
-	return 4*(a+b)+3;
-}

@@ -9,6 +9,7 @@
 #include <complex>
 #include "multilayer.hpp"
 #include "SMatrix.hpp"
+#include "mlgeo.hpp"
 #include "materials.hpp"
 
 typedef std::complex<double> cdouble;
@@ -29,7 +30,7 @@ int main() {
 	const epsfn epsInt = epsVac; // spacer layer
 	const double d1 = 10; // thickness of eps1 (um)
 	const double d2 = 0;
-	const double di = 1; // distance between stacks
+	const double di = 10; // distance between stacks
 	const double units = 1e-9; // nm
 	const int s = 1; // source layer
 
@@ -57,7 +58,7 @@ int main() {
 	const double kB = 1.3806488e-23;
 	w1 = 1.5e14; 
 	w2 = 1.9e14;
-	Nw = 50;
+	Nw = 100;
 
 	double kp, k1, k2;
 	int Nk, ik;
@@ -66,6 +67,7 @@ int main() {
 	Nk = 100;
 
 	//printEps(epsSiC, w1, w2, Nw);
+	bool omegaK = true;
 	for (iw=0; iw<Nw; ++iw) {
 		w = (Nw!=1) ?  w1 + iw*(w2-w1)/(Nw-1) : w1;
 		k0 = w/3.e8 * units; // 1/um
@@ -73,25 +75,29 @@ int main() {
 		for(int i=0; i<numLayers; ++i)
 			epsV[i] = eps[i](w);
 
-		mlgeo *g = new mlgeo;
-		initGeo(epsV, d, numLayers-1, g);
+		mlgeo *g = new mlgeo(epsV, d, numLayers-1);
 
 		t = hbar*w / (exp(hbar*w/(kB*300)) - 1); // Boltzmann Theta
 		
-		/*for(ik=0; ik<Nk; ++ik) {
-			kp = (Nk!=1) ? (k1 + ik*(k2-k1)/(Nk-1))*k0 : k1*k0;
+		if(omegaK) {
+			for(ik=0; ik<Nk; ++ik) {
+				kp = (Nk!=1) ? (k1 + ik*(k2-k1)/(Nk-1))*k0 : k1*k0;
 
-			q1 = flux(g, 2, s, di/2., k0, kp, 1., 5);
-			q2 = flux(g, 4, s, di/2., k0, kp, 1.);
-			std::cout << w << " " << kp/k0 << " " << (q1-q2)*t/units << std::endl;
-		}*/
-
-		q1 = fluxKpInt(g, 2, 1, di/2., k0, 1.);
-		q2 = fluxKpInt(g, 4, 1, di/2., k0, 1.);
-		std::cout << w << " " << (q1-q2)*t/(units*units) << std::endl; // e.g. \um^2 -> \m^2
+				q1 = flux(g, 2, s, di/2., k0, kp, 1., 5);
+				q2 = flux(g, 4, s, di/2., k0, kp, 1.);
+				std::cout << w << " " << kp/k0 << " " << (q1-q2)*t/units << std::endl;
+			}
+		} else {
+			q1 = fluxKpInt(g, 2, 1, di/2., k0, 1.);
+			q2 = fluxKpInt(g, 4, 1, di/2., k0, 1.);
+			std::cout << w << " " << (q1-q2)*t/(units*units) << std::endl; // e.g. \um^2 -> \m^2
+		}
 		delete g;
 	}
 
+	delete[] d;
+	delete[] eps;
+	delete[] epsV;
 	//std::cout << "\nflux from all of s: " << h << std::endl;
 	//std::cout << "t: " << t << std::endl;
 	//std::cout << "flux * Boltzmann: " << h*t << std::endl;

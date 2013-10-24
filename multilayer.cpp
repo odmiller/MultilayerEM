@@ -2,12 +2,14 @@
 #include <iostream>
 #include <complex>
 #include "SMatrix.hpp"
+#include "mlgeo.hpp"
 #include "multilayer.hpp"
 
 typedef std::complex<double> cdouble;
 const cdouble II(0.,1.);
 using std::conj;
 using std::real;
+using std::imag;
 
 // for given stack (sMatrix:S,kz,k), compute flux at zl (in layer l) from 
 // emitter at zs (in layer s, with permittivity epsS), for k0 and kp (in S)
@@ -51,7 +53,7 @@ void pWavesL(const SMatrix *S, int l, int s, int pol, pwaves &p) {
 //   nHat = 1. or -1.
 double flux(const mlgeo *g, int l, int s, double zl,  
 	double k0, double kp, double nHat, double zs) {
-	if (g->eps[s].imag() == 0)
+	if ( imag(g->eps(s)) == 0)
 		return 0;
 
 	pwaves pTE, pTM;
@@ -62,11 +64,11 @@ double flux(const mlgeo *g, int l, int s, double zl,
 	pWavesL(S, l, s, TM, pTM);
 
 	if(zs<0) // not allowed otherwise (use to signify layer calc - default val=-1)
-		hgf = gfFlux(S, pTE, pTM, l, s, zl, g->d[s-1]);
+		hgf = gfFlux(S, pTE, pTM, l, s, zl, g->d(s));
 	else
 		hgf = gfFluxSP(S, pTE, pTM, l, s, zl, zs);
 	delete S;
-	return nHat * real( k0 * k0 * II * imag(g->eps[s]) * hgf / (M_PI * M_PI) );
+	return nHat * real( k0 * k0 * II * imag(g->eps(s)) * hgf / (M_PI * M_PI) );
 }
 
 cdouble zsInt(int s1, int s2, cdouble kzs, double ds) {
@@ -154,6 +156,8 @@ cdouble gfFlux(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 }
 
 // Green's functions contribution to flux, from single zs in s
+// Very important: zprime in Francoeur et. al. should be relative 
+// to zs (Francoeur notation), not the absolute position.
 cdouble gfFluxSP(const SMatrix *S, const pwaves &pTE, const pwaves &pTM, 
 	int l, int s, double zl, double zs) {
 			
@@ -167,7 +171,6 @@ cdouble gfFluxSP(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	const cdouble &kp = S->kp;
 	xl = II * kzl * zl; 
 	xs = II * kzs * zs; 
-	//xs = II * kzs * (zs + g->z[s]); // abs, not rel pos.
 
 	Ae = pTE.Al * exp(xl-xs);
 	Be = pTE.Bl * exp(-xl-xs);
@@ -183,16 +186,11 @@ cdouble gfFluxSP(const SMatrix *S, const pwaves &pTE, const pwaves &pTM,
 	gEpp = II * kzl * kp / (2. * ks * kl) * ( Am - Bm - Cm + Dm );
 	gEpz = II * kzl * kp * kp / (2. * kzs * ks * kl) * ( -Am + Bm - Cm + Dm ); 
 	gEtt = II * kp / (2. * kzs) * ( Ae + Be + Ce + De );
-	//gEzp = II * kp * kp / (2. * ks * kl) * ( -Am - Bm + Cm + Dm );
-	//gEzz = II * kp * kp * kp / (2. * ksz * ks * kl) * ( Am + Bm + Cm + Dm );
-	//std::cout << gEpp << " " << gEpz << " " << gEtt << std::endl;
 
 	// magnetic dyadic Green's functions
 	gHpt = kzl / (2. * kzs) * ( Ae - Be + Ce - De );
 	gHtp = kl / (2. * ks) * ( -Am - Bm + Cm + Dm ); 
 	gHtz = kl * kp / (2. * ks * kzs) * ( Am + Bm + Cm + Dm );
-	//gHzt = kp / (2. * kzs) * ( -Ae - Be - Ce - De );
-	//std::cout << gHpt << " " << gHtp << " " << gHtz << " " << std::endl;
 
 	return gEpp*conj(gHtp) + gEpz*conj(gHtz) - gEtt*conj(gHpt);
 }

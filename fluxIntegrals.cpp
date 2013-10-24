@@ -47,7 +47,7 @@ double fluxKpInt(const mlgeo *g, int l, int s, double zl, double k0, double nHat
 double fluxZInt(mlgeo *g, int l, int s, double zl, double k0, double kp, double nHat) {
 	int res;
 	unsigned fdim = 1, dim = 1;
-	double xmin = 0, xmax = g->d[s-1], val, err; // s cannot equal 0 or N 
+	double xmin = 0, xmax = g->d(s), val, err; // s cannot equal 0 or N 
 	double absError = 0, relError = 1e-6;
 	size_t maxEval = 1e5;
 	geoData fdata = {g, l, s, zl, k0, kp, nHat};
