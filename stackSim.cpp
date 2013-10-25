@@ -3,30 +3,43 @@
 #include <complex>
 #include "multilayer.hpp"
 #include "SMatrix.hpp"
+#include "mlgeo.hpp"
 #include "materials.hpp"
 
 typedef std::complex<double> cdouble;
 typedef cdouble (*epsfn)(double);
 
-// forward decl to avoid fluxIntegrals header
-double fluxZInt(mlgeo *g, int l, int s, double zl, double k0, double kp, double nHat);
+double fluxKpInt(const mlgeo *g, int l, int s, double zl, double k0, double nHat);
 
 int main() {
-	//epsfn geoEps[] = { epsVac, epsAu, epsAg, epsVac };	
-	
 	// pararmeters for two multilayer stacks 
 	// of alternating materials/thicknesses, with some thickness
 	// separating them.  Vacuum on either side
 	//   eps0 || eps1,d1 || eps2,d2 || ... || epsInt,di || ... || eps1,d1 || epsN
-	const int numLayersPerMat = 1;  // odd, for mirror symmetry
+	const int numLayersPerMat = 10;
 	const epsfn eps0 = epsVac;
-    const epsfn eps1 = epsCBN;
-	const epsfn eps2 = epsVac; //[=] (double d)  { return epsConst(d,3.9); }; // SiO2=3.9
+    //const epsfn eps1 = [=] (double w) { return epsSiDoped(w,5.e19); };
+	const epsfn eps1 = epsAg;
+	const epsfn eps2 = [=] (double w)  { return epsConst(w,3.9); }; // SiO2=3.9
 	const epsfn epsN = epsVac;
 	const epsfn epsInt = epsVac; // spacer layer
-	const double d1 = 0.010; // thickness of eps1 (um)
-	const double d2 = 0.090;
-	const double di = 0.100; // distance between stacks
+	const double d1 = 30; // thickness of eps1 (um)
+	const double d2 = 200.-d1;
+	const double di = 100; // distance between stacks
+	const double units = 1e-9; // nm
+
+	bool boltzmann = false;
+	bool omegaK = false; 
+	bool print_eps = false;
+
+	// frequency and wavevector
+	double w1 = 1.8e14; 
+	double w2 = 1.0e15;
+	int Nw = 1;
+
+	double k1 = 1.01;
+	double k2 = 40;
+	int Nk = 100;
 
 	int numLayers = numLayersPerMat*2 + 3;
 	epsfn *eps = new epsfn[numLayers];
@@ -34,66 +47,65 @@ int main() {
 	double *d = new double[numLayers-2];
 
 	// setup stack, eps & d values
+	int intLayer = numLayersPerMat + 1;
+	int lastLayer = 2 * intLayer;
 	eps[0] = eps0;
-	eps[numLayers-1] = epsN;
+	eps[intLayer] = epsInt;
+	eps[lastLayer] = epsN;
+	d[intLayer-1] = di;
 	for(int i=0; i<numLayersPerMat; ++i) {
-		eps[i+1] = (i%2==0) ? eps1 : eps2;
-		eps[numLayers-1-i-1] = eps[i+1];
-		d[i] = (i%2==0) ? d1 : d2;
-		d[numLayers-i-3] = d[i];
+		eps[intLayer-1-i] = (i%2==0) ? eps1 : eps2;
+		eps[intLayer+1+i] = (i%2==0) ? eps1 : eps2;
+		d[intLayer-2-i] = (i%2==0) ? d1 : d2;
+		d[intLayer+i] = (i%2==0) ? d1 : d2;
 	}
-	eps[numLayersPerMat+1] = epsInt;
-	d[numLayersPerMat] = di;
 
-	// pick frequency and wavevector
-	double w, k0, kp;
-	w = 2*M_PI*3.e8/500e-9;
-	k0 = w/3.e14; // 1/um
-	//kp = k0 * sin(M_PI/6);
-	kp = k0 * 3;
-	for(int i=0; i<numLayers; ++i)
-		epsV[i] = eps[i](w);
+	if(print_eps) {
+		for(int i=0; i<numLayers; ++i)
+			epsV[i] = eps[i](w1);
+		mlgeo *g = new mlgeo(epsV, d, numLayers-1);
+		g->print();
+		printEps(eps1, w1, w2, Nw);
+		return 0;
+	}
 
-	mlgeo *g = new mlgeo;
-	initGeo(epsV, d, numLayers-1, g);
-	printGeo(g);
-
-	SMatrix *S = new SMatrix(g, k0, kp);
-	//S->printSMatrix();
-
-	pwaves p0e, p2e, p0h, p2h;
-	pWavesL(S, 0, 1, TE, p0e);
-	pWavesL(S, 2, 1, TE, p2e);
-	pWavesL(S, 0, 1, TM, p0h);
-	pWavesL(S, 2, 1, TM, p2h);
-
-/*	std::cout << "FIELDS IN LAYER 0" << std::endl;
-	gfFlux(S, g, p0e, p0h, 0, 1, -0.1, 0.05);
-	std::cout << "A.h0: " << p0h.Al << "  B.h0: " << p0h.Bl << "  C.h0" << p0h.Cl 
-		<< "  D.h0: " << p0h.Dl << std::endl;
-	std::cout << "A.e0: " << p0e.Al << "  B.e0: " << p0e.Bl << "  C.e0" << p0e.Cl 
-		<< "  D.e0: " << p0e.Dl << std::endl;
-	std::cout << "\n\n" << std::endl;
-
-	std::cout << "FIELDS IN LAYER 2" << std::endl;
-	gfFlux(S, g, p2e, p2h, 2, 1, 0.1, 0.05);
-	std::cout << "A.h2: " << p2h.Al << "  B.h2: " << p2h.Bl << "  C.h2" << p2h.Cl 
-		<< "  D.h2: " << p2h.Dl << std::endl;
-	std::cout << "A.e2: " << p2e.Al << "  B.e2: " << p2e.Bl << "  C.e2" << p2e.Cl 
-		<< "  D.e2: " << p2e.Dl << std::endl;
-	std::cout << "\n\n" << std::endl;
-*/
-	double h = flux(g, 2, 3, 0.05, k0, kp, -1., 0.005);
-	std::cout << "\nflux from zs=0.005: " << h << std::endl;
+	double w, k0, q1, q2, kp, norm = 1.;
+	for (int iw=0; iw<Nw; ++iw) {
+		w = (Nw!=1) ?  w1 + iw*(w2-w1)/(Nw-1) : w1;
+		k0 = w/3.e8 * units;
+		
+		if(boltzmann)
+			norm = meanEnergy(w,300);
+					
+		for(int i=0; i<numLayers; ++i)
+			epsV[i] = eps[i](w);
+		mlgeo *g = new mlgeo(epsV, d, numLayers-1);
 	
-	double h2 = flux(g, 2, 1, 0.05, k0, kp, 1., 0.005);
-	std::cout << "\nflux from zs=0.005: " << h2 << std::endl;
+		if(omegaK) {
+			for(int ik=0; ik<Nk; ++ik) {
+				kp = (Nk!=1) ? (k1 + ik*(k2-k1)/(Nk-1))*k0 : k1*k0;
+				q1 = 0; q2 = 0;
+				for(int s = 1; s <= numLayersPerMat; ++s) {
+					q1 += flux(g, intLayer, s, di/2., k0, kp, 1.);
+					q2 += flux(g, lastLayer, s, di/2., k0, kp, 1.);
+				}
+				std::cout << w << " " << kp/k0 << " " << norm*(q1-q2)/units << std::endl;
+			}
+		} else {
+			q1 = 0; q2 = 0;
+			for(int s = 1; s <= numLayersPerMat; ++s) {
+				q1 += fluxKpInt(g, intLayer, s, di/2., k0, 1.);
+				q2 += fluxKpInt(g, lastLayer, s, di/2., k0, 1.);
+			}
+			std::cout << w << " " << norm*(q1-q2)/(units*units) << std::endl; // e.g. \um^2 -> \m^2
+		}
+		delete g;
+	}
 
-	// test numerical integration
-	std::cout << "\nEntering numerical integration procedure:" << std::endl;
-	fluxZInt(g, 2, 3, 0.05, k0, kp, -1.);
-	
-	// test analytical integral
-	h2 = flux(g, 2, 3, 0.05, k0, kp, -1.);
-	std::cout << "\nflux from all of s: " << h2 << std::endl;
+	delete[] d;
+	delete[] eps;
+	delete[] epsV;
+	//std::cout << "\nflux from all of s: " << h << std::endl;
+	//std::cout << "t: " << t << std::endl;
+	//std::cout << "flux * Boltzmann: " << h*t << std::endl;
 }

@@ -19,6 +19,35 @@ using std::imag;
 //   zl \in [0,t[l]] if 0<l<N
 //  not yet permitted: zl<0 if l==0, zl>0 if l==N (bndry condtions change)
 
+// flux from s to zl for given geometry (g) and kp, k0 (S)
+// either from a single zs, or from entire s layer
+//   nHat = 1. or -1.
+double flux(const mlgeo *g, int l, int s, double zl,  
+	double k0, double kp, double nHat, double zs) {
+	if ( imag(g->eps(s)) == 0)
+		return 0;
+
+	pwaves pTE, pTM;
+	cdouble hgf;
+
+	SMatrix *S = new SMatrix(g, k0, kp);
+	pWavesL(S, l, s, TE, pTE); 	
+	pWavesL(S, l, s, TM, pTM);
+
+	if(zs<0) // not allowed otherwise (use to signify layer calc - default val=-1)
+		hgf = gfFlux(S, pTE, pTM, l, s, zl, g->d(s));
+	else
+		hgf = gfFluxSP(S, pTE, pTM, l, s, zl, zs);
+	delete S;
+	return nHat * real( k0 * k0 * II * imag(g->eps(s)) * hgf / (M_PI * M_PI) );
+}
+
+double meanEnergy(double w, double T) {
+	//const double q = 1.60217657e-19;
+	const double hbar = 6.62606957e-34/2./M_PI;
+	const double kB = 1.3806488e-23;
+	return hbar*w / (exp(hbar*w/(kB*T)) - 1); // Boltzmann "Theta"
+}
 // compute just the partial waves in layer l
 //   should have update() function for S-Matrix
 //   Splus and Sminus taken out, inserted in flux eqn. (as in Ref.)
@@ -46,29 +75,6 @@ void pWavesL(const SMatrix *S, int l, int s, int pol, pwaves &p) {
 		p.Cl = CN / S->S11(l,N,pol);
 		p.Dl = S->S21(l,N,pol) * p.Cl;
 	}
-}
-
-// flux from s to zl for given geometry (g) and kp, k0 (S)
-// either from a single zs, or from entire s layer
-//   nHat = 1. or -1.
-double flux(const mlgeo *g, int l, int s, double zl,  
-	double k0, double kp, double nHat, double zs) {
-	if ( imag(g->eps(s)) == 0)
-		return 0;
-
-	pwaves pTE, pTM;
-	cdouble hgf;
-
-	SMatrix *S = new SMatrix(g, k0, kp);
-	pWavesL(S, l, s, TE, pTE); 	
-	pWavesL(S, l, s, TM, pTM);
-
-	if(zs<0) // not allowed otherwise (use to signify layer calc - default val=-1)
-		hgf = gfFlux(S, pTE, pTM, l, s, zl, g->d(s));
-	else
-		hgf = gfFluxSP(S, pTE, pTM, l, s, zl, zs);
-	delete S;
-	return nHat * real( k0 * k0 * II * imag(g->eps(s)) * hgf / (M_PI * M_PI) );
 }
 
 cdouble zsInt(int s1, int s2, cdouble kzs, double ds) {
