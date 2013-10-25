@@ -1,0 +1,52 @@
+--------------
+multilayer
+
+Owen D. Miller
+Oct. 2013
+-------------- 
+A set of c/c++ (more like c + classes) codes to compute scattering matrices and 
+thermal radiative fluxes for arbitrarily multilayer stacks of metals/
+dielectrics.  The basic idea is that the fluctuation-dissipation theorem 
+provides a simple expression for the stochastic sources in media at a given
+temperature.  The Green's functions for layered media are known, such that 
+computation of thermal radiative flux rates is straightforward.  Scattering 
+matrices are used for numerical stability.  A ref. for the algorithm (minus a
+few small modifications) is:
+
+Francoeur et. al., "Solution of near-field thermal radiation in one-dimensional
+ layered media using dyadic Green's functions and the scattering matrix method,"
+ Journal of Quantitative Spectroscopy and Radiative Transfer 110, 2002 (2009)
+
+Codes:
+- stackSim.cpp: a working example of how to compute emission rates in a large
+  complex multilayer system
+
+- SMatrix.cpp: a class to hold scattering matrices of a structure at a given
+  frequency (w) and parallel wavevector (kp)
+
+- mlgeo.cpp: a multilayer geometry class, encapsulating the permittivity and
+  thickness of each layer (including the embedding half-spaces)
+
+- multilayer.cpp: contains the functions to compute flux rates (from the 
+  corresponding partial waves) for an emitter in one layer to a flux plane
+  in another layer.  Included are analytical expressions for the flux rate
+  integrated over all emitters in a given layer.
+
+- materials.cpp: (NOT REQUIRED) Note that this is an auxiliary code I have 
+  provided.  It is a code I use with functions for common material models
+  (in the infrared)
+
+- fluxIntegrals.cpp: (NOT REQUIRED) This file provides functions to integrate
+  the flux rates over parallel wavevector.  It uses the Cubature package 
+  (ab-initio.mit.edu/wiki/index.php/Cubature) written by Steven G. Johnson
+
+- Many of the above have corresponding header files
+
+Note that as currently written, stackSim.cpp does use a lambda, so I compile 
+it with the -std=c++11 flag.  However, this is not at all required (it is
+only to comply with my own material function definitions) and no other aspect 
+of the code depends on c++11.
+
+At some point simple functions to compute the reflectivity and transmission of
+a given stack will be added.  These are given by the S11(0,N) and S21(0,N) 
+S-Matrix components, however, which are easy to compute with SMatrix.cpp
