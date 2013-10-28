@@ -5,7 +5,7 @@ Owen D. Miller
 Oct. 2013
 -------------- 
 A set of c/c++ (more like c + classes) codes to compute scattering matrices and 
-thermal radiative fluxes for arbitrarily multilayer stacks of metals/
+thermal radiative fluxes for multilayer stacks of arbitrarilty many metals/
 dielectrics.  The basic idea is that the fluctuation-dissipation theorem 
 provides a simple expression for the stochastic sources in media at a given
 temperature.  The Green's functions for layered media are known, such that 
@@ -50,3 +50,5 @@ of the code depends on c++11.
 At some point simple functions to compute the reflectivity and transmission of
 a given stack will be added.  These are given by the S11(0,N) and S21(0,N) 
 S-Matrix components, however, which are easy to compute with SMatrix.cpp
+
+On Windows, you may have to compile with D_USE_MATH_DEFINES

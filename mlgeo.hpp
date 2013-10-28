@@ -1,4 +1,6 @@
 
+// MULTI-LAYER GEOMETRY CLASS
+
 #ifndef MLGEO_H
 #define MLGEO_H
 

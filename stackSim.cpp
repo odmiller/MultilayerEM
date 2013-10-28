@@ -1,7 +1,7 @@
 
 #include <iostream>
 #include <complex>
-#include "multilayer.hpp"
+#include "fieldFunctions.hpp"
 #include "SMatrix.hpp"
 #include "mlgeo.hpp"
 #include "materials.hpp"
@@ -16,26 +16,28 @@ int main() {
 	// of alternating materials/thicknesses, with some thickness
 	// separating them.  Vacuum on either side
 	//   eps0 || eps1,d1 || eps2,d2 || ... || epsInt,di || ... || eps1,d1 || epsN
-	const int numLayersPerMat = 10;
+	const int numLayersPerMat = 4;
 	const epsfn eps0 = epsVac;
     //const epsfn eps1 = [=] (double w) { return epsSiDoped(w,5.e19); };
-	const epsfn eps1 = epsAg;
+	const epsfn eps1 = epsSiC;
 	const epsfn eps2 = [=] (double w)  { return epsConst(w,3.9); }; // SiO2=3.9
 	const epsfn epsN = epsVac;
 	const epsfn epsInt = epsVac; // spacer layer
-	const double d1 = 30; // thickness of eps1 (um)
-	const double d2 = 200.-d1;
+	const double ff = 0.2;
+	const double totalD = 250.;
+	const double d1 = ff * totalD; // thickness of eps1 (um)
+	const double d2 = (1.-ff) * totalD;
 	const double di = 100; // distance between stacks
 	const double units = 1e-9; // nm
 
 	bool boltzmann = false;
-	bool omegaK = false; 
+	bool omegaK = true;
 	bool print_eps = false;
 
 	// frequency and wavevector
-	double w1 = 1.8e14; 
-	double w2 = 1.0e15;
-	int Nw = 1;
+	double w1 = 1.0e14; 
+	double w2 = 2.4e14;
+	int Nw = 100;
 
 	double k1 = 1.01;
 	double k2 = 40;
@@ -85,11 +87,22 @@ int main() {
 			for(int ik=0; ik<Nk; ++ik) {
 				kp = (Nk!=1) ? (k1 + ik*(k2-k1)/(Nk-1))*k0 : k1*k0;
 				q1 = 0; q2 = 0;
-				for(int s = 1; s <= numLayersPerMat; ++s) {
+				SMatrix S = SMatrix(g, k0, kp);
+				/*for(int s = 1; s <= numLayersPerMat; ++s) {
 					q1 += flux(g, intLayer, s, di/2., k0, kp, 1.);
 					q2 += flux(g, lastLayer, s, di/2., k0, kp, 1.);
 				}
 				std::cout << w << " " << kp/k0 << " " << norm*(q1-q2)/units << std::endl;
+				*/
+				int s = 1;
+				double zs = g->d(s) / 2.;
+				pwaves pTE, pTM;
+				pWavesL(&S, intLayer, s, TE, pTE); 
+				pWavesL(&S, intLayer, s, TM, pTM); 
+				cdouble qa1 = gfFluxTE(&S, pTE, intLayer, s, di/2., zs, false)
+							+ gfFluxTM(&S, pTM, intLayer, s, di/2., zs, false);
+				cdouble qa2 = gfFluxSP(&S, pTE, pTM, intLayer, s, di/2., zs);
+				std::cout << w << " " << kp/k0 << " " << qa1 << " " << qa2 << std::endl;
 			}
 		} else {
 			q1 = 0; q2 = 0;

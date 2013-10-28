@@ -2,7 +2,7 @@
 #include <iostream>
 #include <complex>
 #include "cubature.h"
-#include "multilayer.hpp"
+#include "fieldFunctions.hpp"
 #include "SMatrix.hpp"
 
 struct geoData {
@@ -13,16 +13,16 @@ struct geoData {
 
 int intFxKp(unsigned ndim, const double *kp, void *fdata, unsigned fdim, double *fval) {
 	geoData *f = (geoData *) fdata;
-	*fval = flux(f->g, f->l, f->s, f->zl, f->k0, (*kp) * f->k0, f->nHat);
+	*fval = flux(f->g, f->k0, (*kp) * f->k0, f->l, f->s, f->zl, f->nHat);
 	return 0;
 }
-
+/*
 int intFxZ(unsigned ndim, const double *zs, void *fdata, unsigned fdim, double *fval) {
 	geoData *f = (geoData *) fdata;
-	*fval = flux(f->g, f->l, f->s, f->zl, f->k0, f->kp, f->nHat, *zs);
+	*fval = flux(f->g, f->k0, f->kp, f->l, f->s, f->zl, f->nHat, *zs);
 	return 0;
 }
-
+*/
 // integrate over kp (integration over emitter layer assumed)
 double fluxKpInt(const mlgeo *g, int l, int s, double zl, double k0, double nHat) {
 	if( std::imag(g->eps(s)) == 0 )
@@ -51,6 +51,7 @@ double fluxKpInt(const mlgeo *g, int l, int s, double zl, double k0, double nHat
 	return k0*val; // in units of k0 above
 }
 
+/*
 // integrate over emitter layer (have analytical formula - should be unnecessary!)
 double fluxZInt(mlgeo *g, int l, int s, double zl, double k0, double kp, double nHat) {
 	int res;
@@ -66,3 +67,4 @@ double fluxZInt(mlgeo *g, int l, int s, double zl, double k0, double kp, double 
 	std::cout << "error value: " << err << std::endl;
 	return val;
 }
+*/
