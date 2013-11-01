@@ -15,7 +15,7 @@ class SMatrix {
 	public:
 		SMatrix(const std::complex<double> *eps, const double *d, 
 				int NIn, double k0In, double kpIn);
-		SMatrix(const mlgeo *g, double k0In, double kpIn);
+		SMatrix(const mlgeo &g, double k0In, double kpIn);
 		~SMatrix();
 		std::complex<double> S11(int a, int b, int pol) const; 
 		std::complex<double> S12(int a, int b, int pol) const;
@@ -28,7 +28,7 @@ class SMatrix {
 		int N;
 
 	private:
-		void initMatrix(const mlgeo *g);
+		void initMatrix(const mlgeo &g);
 		std::complex<double> *sTE;
 		std::complex<double> *sTM;
 };

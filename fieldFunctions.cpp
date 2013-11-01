@@ -11,6 +11,11 @@ using std::conj;
 using std::real;
 using std::imag;
 
+const double hbar = 6.62606957e-34/2./M_PI;
+const double kB = 1.3806488e-23;
+const double c0 = 299792458.;
+const double Z0 = 119.9169832 * M_PI;
+
 // Flux from s to zl for given geometry (g) and kp, k0
 // Integrated over emitter evenly distributed in s
 //   if don't want integral, gfFlux's below provide simple interface
@@ -20,60 +25,148 @@ using std::imag;
 //   zl, zs are RELATIVE positions, starting from left boundary of resp. layers
 //   not yet permitted: zl<0 if l==0, zl>0 if l==N (bndry condtions change)
 //
-// NOTE: Do not use this version of the function if you have more than one 
-// emitting layer.  This version recomputes the scattering matrix every time.
-// Precompute the scattering matrix (for a given kp & k0), then use the
-// function below of the same name but different signature.
-double flux(const mlgeo *g, double k0, double kp, int l, int s, 
-			double zl, double nHat) {
-	if ( imag(g->eps(s)) == 0)
-		return 0;
-	SMatrix *S = new SMatrix(g, k0, kp);
-	double f = flux(S, l, s, zl, g->eps(s), g->d(s), nHat);
-	delete S;
+// Specify all emitting layers in s array.  First version computes/discards the 
+//   scattering matrix for you, second accepts precomputed S.  nHat is assumed 
+//   to be the same for each emittering layer
+double flux(const mlgeo &g, double k0, double kp, int l, double zl, 
+			const int *s, int Ns, double nHat) { 
+	SMatrix S = SMatrix(g, k0, kp);
+	return flux(g, S, l, zl, s, Ns, nHat);
+}
+double flux(const mlgeo &g, const SMatrix &S, int l, double zl, 
+			const int *s, int Ns, double nHat) { 
+	pwaves pTE, pTM;
+	double f = 0;
+	for (int sind = 0, si = s[sind]; sind < Ns; ++sind, ++si) {
+		if (imag(g.eps(si)) == 0)
+			continue;
+		pWavesL(S, l, si, TE, &pTE);
+		pWavesL(S, l, si, TM, &pTM);
+		f -= nHat * S.k0 * S.k0 / (M_PI * M_PI) * imag(g.eps(si)) 
+			* imag( gfFluxTE(S, pTE, l, si, zl, g.d(si), nHat)
+			+ gfFluxTM(S, pTM, l, si, zl, g.d(si), nHat) );
+	}
 	return f;
 }
-double flux(const SMatrix *S, int l, int s, double zl,
-			cdouble epsS, double ds, double nHat) {
-	if ( imag(epsS) == 0)
-		return 0;
-	pwaves pTE, pTM;
-	pWavesL(S, l, s, TE, pTE); 	
-	pWavesL(S, l, s, TM, pTM);
-	cdouble hgf = gfFluxTE(S, pTE, l, s, zl, ds, true); 
-		 		+ gfFluxTM(S, pTM, l, s, zl, ds, true);  
-	return nHat * real( S->k0 * S->k0 * II * imag(epsS) * hgf / (M_PI * M_PI) );
+
+// flux of a blackbody (/ dist^2 / freq), not / wavevector!
+// multiply by (1/a)^2 to get 1/m^2
+double flux_bb(double k0) {
+	return k0 * k0 / (4. * M_PI * M_PI);
 }
 
-double meanEnergy(double w, double T) {
-	const double hbar = 6.62606957e-34/2./M_PI;
-	const double kB = 1.3806488e-23;
-	return hbar*w / (exp(hbar*w/(kB*T)) - 1); // Boltzmann "Theta"
+// Integrated flux for blackbody (in vacuum)
+// Given by Stefan-Boltzmann (or integral of mean_energy * dos_bb)
+// multiply by hbar*c^2/lscale^4 to get W/m^2
+double flux_bb_int(double lscale, double T) {
+	return pow(lscale * kB * T / (hbar * c0), 4) * M_PI * M_PI / 60.;
+}
+
+// density of states, DOS (technically electric DOS, i.e. DOS of an electric dipole)
+//   cf. e.g. Joulain et. al. PRB 68, 245405 (2003)
+double dos(const mlgeo &g, double k0, double kp, int l, double zl) {
+	SMatrix S = SMatrix(g, k0, kp);
+	return dos(S, l, zl);
+}
+
+// same as above but with S precomputed (e.g. if multiple zl's desired)
+double dos(const SMatrix &S, int l, double zl) {
+	pwaves pTE, pTM;	
+	pWavesL(S, l, l, TE, &pTE); // source layer = emitter layer
+	pWavesL(S, l, l, TM, &pTM);
+
+	cdouble kzl = S.kz[l]; // kzs = kzl
+	cdouble kl = S.k[l];
+	cdouble kp = S.kp;
+	cdouble xl = II * kzl * zl; // xs = xl
+	
+	cdouble Ae = pTE.Al;
+	cdouble Be = pTE.Bl * exp(-2.*xl);
+	cdouble Ce = pTE.Cl * exp(2.*xl);
+	cdouble De = pTE.Dl;
+	cdouble Am = pTM.Al;
+	cdouble Bm = pTM.Bl * exp(-2.*xl);
+	cdouble Cm = pTM.Cl * exp(2.*xl);
+	cdouble Dm = pTM.Dl;
+		
+	// extra factors of 1 are extra source term when l==s
+	cdouble Epp = II * kzl * kp / (kl * kl) 
+				* (Am - Bm - Cm + Dm + 1.); 
+	cdouble Ett = II * kp / kzl
+				* (Ae + Be + Ce + De + 1.);
+	cdouble Ezz = II * kp * kp * kp / (kzl * kl * kl) 
+				* (Am + Bm + Cm + Dm + 1.);
+	return S.k0 * S.k0 * imag(Epp + Ett + Ezz) / (2. * M_PI * M_PI);   
+}
+
+double dos_vacuum(double k0) {
+	return k0 * k0 / (2. * M_PI * M_PI);
+}
+
+// multiply by hbar*c/lscale to get J
+double mean_energy(double k0, double lscale, double T) {
+	return k0 / (exp(hbar * c0 * k0 / (lscale * kB * T)) - 1); // Boltzmann "Theta"
+}
+
+void reflTrans(const mlgeo &g, double k0, double theta, int pol, 
+				cdouble *r, double *R, cdouble *t, double *T) {
+	SMatrix S = new SMatrix(g, k0, k0 * sin(theta));
+	*r = S->S21(0, g.N, pol);
+	*t = S->S11(0, g.N, pol);
+	*R = (*r) * conj(*r); 
+	*T = real(sqrt(g.eps(N))) / real(sqrt(g.eps(0))) * (*t) * conj(*t); 
 }
 
 // compute just the partial waves in layer l
 //   Splus and Sminus taken out, inserted in flux eqn. (as in Francoeur)
-void pWavesL(const SMatrix *S, int l, int s, int pol, pwaves &p) {
-	int N = S->N;
-	// partial waves in s,0,N layers (A0=BN=C0=DN=0)
-	cdouble Bs = S->S21(s,N,pol) / (1. - S->S12(0,s,pol)*S->S21(s,N,pol)) ; 
-	cdouble As = S->S12(0,s,pol) * Bs;
-	cdouble B0 = S->S22(0,s,pol) * Bs;
-	cdouble AN = S->S11(s,N,pol) * (As + 1.);
-	cdouble Cs = S->S12(0,s,pol) / (1. - S->S12(0,s,pol)*S->S21(s,N,pol));
-	cdouble Ds = S->S21(s,N,pol) * Cs;
-	cdouble CN = S->S11(s,N,pol) * Cs;
-	cdouble D0 = S->S22(0,s,pol) * (Ds + 1.);
-	if(l<s) { // flux to the left of emitter
-		p.Bl = B0 / S->S22(0,l,pol);
-		p.Al = S->S12(0,l,pol) * p.Bl;
-		p.Dl = D0 / S->S22(0,l,pol);
-		p.Cl = S->S12(0,l,pol) * p.Dl;
-	} else { // flux to the right of emitter
-		p.Al = AN / S->S11(l,N,pol);
-		p.Bl = S->S21(l,N,pol) * p.Al;
-		p.Cl = CN / S->S11(l,N,pol);
-		p.Dl = S->S21(l,N,pol) * p.Cl;
+void pWavesL(const SMatrix &S, int l, int s, int pol, pwaves *p) {
+	int N = S.N;
+	if (s==0) { // emitting half-space
+		p->Cl = 0; // no waves emitted in the backward direction
+		p->Dl = 0;
+		if (l==0) {
+			p->Al = 0;
+			p->Bl = S.S21(l,N,pol);
+		} else {
+			p->Al = S.S11(0,N,pol) / S.S11(l,N,pol);
+			p->Bl = S.S21(l,N,pol) * p->Al;
+		}
+	} else if (s==N) {
+		p->Al = 0; // no waves in forward dir
+		p->Bl = 0;
+		if (l==N) {
+			p->Dl = 0;
+			p->Cl = S.S12(0,l,pol);
+		} else {
+			p->Dl = S.S22(0,N,pol) / S.S22(0,l,pol);
+			p->Cl = S.S12(0,l,pol) * p->Dl;
+		}
+	} else {
+		// partial waves in s,0,N layers (A0=BN=C0=DN=0)
+		cdouble Bs = S.S21(s,N,pol) / (1. - S.S12(0,s,pol)*S.S21(s,N,pol)) ; 
+		cdouble As = S.S12(0,s,pol) * Bs;
+		cdouble B0 = S.S22(0,s,pol) * Bs;
+		cdouble AN = S.S11(s,N,pol) * (As + 1.);
+		cdouble Cs = S.S12(0,s,pol) / (1. - S.S12(0,s,pol)*S.S21(s,N,pol));
+		cdouble Ds = S.S21(s,N,pol) * Cs;
+		cdouble CN = S.S11(s,N,pol) * Cs;
+		cdouble D0 = S.S22(0,s,pol) * (Ds + 1.);
+		if (l==s) { // flux, emitter in same layer
+			p->Al = As;
+			p->Bl = Bs;
+			p->Cl = Cs;
+			p->Dl = Ds;
+		} else if (l<s) { // flux to the left of emitter
+			p->Bl = B0 / S.S22(0,l,pol);
+			p->Al = S.S12(0,l,pol) * p->Bl;
+			p->Dl = D0 / S.S22(0,l,pol);
+			p->Cl = S.S12(0,l,pol) * p->Dl;
+		} else { // flux to the right of emitter
+			p->Al = AN / S.S11(l,N,pol);
+			p->Bl = S.S21(l,N,pol) * p->Al;
+			p->Cl = CN / S.S11(l,N,pol);
+			p->Dl = S.S21(l,N,pol) * p->Cl;
+		}
 	}
 }
 
@@ -97,14 +190,15 @@ cdouble zsProd(int s1, int s2, cdouble kzs, double zs) {
 }
 
 // TE flux from Green's functions
+//   extra factor of kp (elsewhere in the integrand) to make dimensionless
 // if integrate==true (default), then integral over emitter layer 
 //   done analytically. In this case xs = thickness of layer s
 // if integrate==false, then xs is the location of the emitter
-cdouble gfFluxTE(const SMatrix *S, const pwaves &pTE, 
+cdouble gfFluxTE(const SMatrix &S, const pwaves &pTE, 
 				int l, int s, double zl, double xs, bool integrate) {
-	cdouble kzl = S->kz[l];
-	cdouble kzs = S->kz[s];
-	cdouble kp = S->kp;
+	cdouble kzl = S.kz[l];
+	cdouble kzs = S.kz[s];
+	cdouble kp = S.kp;
 	cdouble xl = II * kzl * zl; 
 	cdouble A = pTE.Al * exp(xl);
 	cdouble B = pTE.Bl * exp(-xl);
@@ -133,13 +227,13 @@ cdouble gfFluxTE(const SMatrix *S, const pwaves &pTE,
 }
 
 // TM flux from Green's functions
-cdouble gfFluxTM(const SMatrix *S, const pwaves &pTM, 
+cdouble gfFluxTM(const SMatrix &S, const pwaves &pTM, 
 				int l, int s, double zl, double xs, bool integrate) {
-	cdouble kzl = S->kz[l];
-	cdouble kzs = S->kz[s];
-	cdouble kl = S->k[l];
-	cdouble ks = S->k[s];
-	cdouble kp = S->kp;
+	cdouble kzl = S.kz[l];
+	cdouble kzs = S.kz[s];
+	cdouble kl = S.k[l];
+	cdouble ks = S.k[s];
+	cdouble kp = S.kp;
 	cdouble xl = II * kzl * zl; 
 	cdouble A = pTM.Al * exp(xl);
 	cdouble B = pTM.Bl * exp(-xl);
@@ -174,45 +268,3 @@ cdouble gfFluxTM(const SMatrix *S, const pwaves &pTM,
 	
 	return fTM;
 }
-
-// DELETE THIS ONCE IT HAS BEEN TESTED AGAINST!!
-// Green's functions contribution to flux, from single zs in s
-// Very important: zprime in Francoeur et. al. should be relative 
-// to zs (Francoeur notation), not the absolute position.
-cdouble gfFluxSP(const SMatrix *S, const pwaves &pTE, const pwaves &pTM, 
-	int l, int s, double zl, double zs) {
-			
-	cdouble xl, xs, Ae, Am, Be, Bm, Ce, Cm, De, Dm;
-	cdouble gEpp, gEpz, gEtt, gHpt, gHtp, gHtz; // gEzp, gEzz, gHzt
-
-	const cdouble &kzl = S->kz[l];
-	const cdouble &kzs = S->kz[s];
-	const cdouble &kl = S->k[l];
-	const cdouble &ks = S->k[s];
-	const cdouble &kp = S->kp;
-	xl = II * kzl * zl; 
-	xs = II * kzs * zs; 
-
-	Ae = pTE.Al * exp(xl-xs);
-	Be = pTE.Bl * exp(-xl-xs);
-	Ce = pTE.Cl * exp(xl+xs);
-	De = pTE.Dl * exp(-xl+xs);
-	Am = pTM.Al * exp(xl-xs);
-	Bm = pTM.Bl * exp(-xl-xs);
-	Cm = pTM.Cl * exp(xl+xs);
-	Dm = pTM.Dl * exp(-xl+xs);
-	
-	// electric dyadic Green's functions
-	// NOTE: extra factor of kp (elsewhere in Francoeur Eqn.) to make g's unitless
-	gEpp = II * kzl * kp / (2. * ks * kl) * ( Am - Bm - Cm + Dm );
-	gEpz = II * kzl * kp * kp / (2. * kzs * ks * kl) * ( -Am + Bm - Cm + Dm ); 
-	gEtt = II * kp / (2. * kzs) * ( Ae + Be + Ce + De );
-
-	// magnetic dyadic Green's functions
-	gHpt = kzl / (2. * kzs) * ( Ae - Be + Ce - De );
-	gHtp = kl / (2. * ks) * ( -Am - Bm + Cm + Dm ); 
-	gHtz = kl * kp / (2. * ks * kzs) * ( Am + Bm + Cm + Dm );
-
-	return gEpp*conj(gHtp) + gEpz*conj(gHtz) - gEtt*conj(gHpt);
-}
-

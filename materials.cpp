@@ -22,15 +22,21 @@ void printEps(epsfn fx, double w1, double w2, int Nw) {
 }
 
 cdouble epsAu(double w) {
-	double epsInf = 1., wp = 1.3594122e16/w, g = 1.0495462e14/w;
-	return cdouble( epsInf - wp*wp /( 1 + g*g ), g*wp*wp /( 1 + g*g ) );
+	double epsInf = 1., wp = 1.3594122e16, g = 1.0495462e14;
+	return epsInf - wp*wp / (w*w + II*g*w);
 }
 
 // for now, just a simple Drude model
 // could also have a multi-oscillator model
 cdouble epsAg(double w) {
-	double epsInf = 1., wp = 1.3689e16/w, g = 2.7347e13/w;
-	return cdouble( epsInf - wp*wp /( 1 + g*g ), g*wp*wp /( 1 + g*g ) );
+	double epsInf = 1., wp = 1.3689e16, g = 2.7347e13;
+	return epsInf - wp*wp / (w*w + II*g*w);
+}
+
+// ref: Joulain et. al. PRB 68, 245405 (2003)
+cdouble epsAl(double w) {
+	double epsInf = 1., wp = 1.747e16, g = 7.596e13;
+	return epsInf - wp*wp / (w*w + II*g*w);
 }
 
 cdouble epsCr(double w) {
@@ -39,8 +45,8 @@ cdouble epsCr(double w) {
 }
 
 cdouble epsW(double w) {
-	double epsInf = 1., wp = 8.8118e15/w, g = 7.5963e13/w;
-	return cdouble( epsInf - wp*wp /( 1 + g*g ), g*wp*wp /( 1 + g*g ) );
+	double epsInf = 1., wp = 8.8118e15, g = 7.5963e13;
+	return epsInf - wp*wp / (w*w + II*g*w);
 }
 
 // SiC, from Ben-Abdallah et. al. J. Appl. Phys. 106, 044306 (2009)

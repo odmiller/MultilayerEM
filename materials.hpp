@@ -7,6 +7,7 @@
 void printEps(std::complex<double> (*fx)(double), double w1, double w2, int Nw);
 std::complex<double> epsAu(double w);
 std::complex<double> epsAg(double w);
+std::complex<double> epsAl(double w);
 std::complex<double> epsCr(double w);
 std::complex<double> epsW(double w);
 std::complex<double> epsSiC(double w); 

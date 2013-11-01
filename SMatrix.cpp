@@ -31,9 +31,9 @@ int ind12(int a, int b);
 int ind21(int a, int b);
 int ind22(int a, int b);
 
-SMatrix::SMatrix(const mlgeo *g, double k0In, double kpIn)
-	: kz(new cdouble[g->N+1]), k(new cdouble[g->N+1]), kp(kpIn), k0(k0In), N(g->N),
-	sTE(new cdouble[4*(2*g->N+1)]), sTM(new cdouble[4*(2*g->N+1)]) // member init. list
+SMatrix::SMatrix(const mlgeo &g, double k0In, double kpIn)
+	: kz(new cdouble[g.N+1]), k(new cdouble[g.N+1]), kp(kpIn), k0(k0In), N(g.N),
+	sTE(new cdouble[4*(2*g.N+1)]), sTM(new cdouble[4*(2*g.N+1)]) // member init. list
 {
 	initMatrix(g);
 }
@@ -43,9 +43,8 @@ SMatrix::SMatrix(const cdouble *eps, const double *d, int NIn, double k0In, doub
 	: kz(new cdouble[N+1]), k(new cdouble[N+1]), kp(kpIn), k0(k0In), N(NIn),
 	sTE(new cdouble[4*(2*N+1)]), sTM(new cdouble[4*(2*N+1)]) // member init. list
 {
-	mlgeo *g = new mlgeo(eps, d, N);
+	mlgeo g = mlgeo(eps, d, N);
 	initMatrix(g);
-	delete g;
 }
 
 // simple destructor
@@ -56,7 +55,7 @@ SMatrix::~SMatrix() {
 	delete[] sTM;
 }
 
-void SMatrix::initMatrix(const mlgeo *g) {
+void SMatrix::initMatrix(const mlgeo &g) {
 	double dl;
 	cdouble exp1, exp2, r, t, *s;
 	int m, n; // going to set S(0,n) and S(m,N), m=0:N,n=0:N
@@ -68,15 +67,15 @@ void SMatrix::initMatrix(const mlgeo *g) {
 		m = 0;
 		n = 0;
 		eyeS(s,ind11(m,n));
-		k[0] = sqrt( g->eps(0) ) * k0;
+		k[0] = sqrt( g.eps(0) ) * k0;
 		kz[0] = sqrt( k[0]*k[0] - kp * kp );
 		for(n=1; n<=N; ++n) { 
-			dl = (n>1) ? g->d(n-1) : 0;
-			k[n] = sqrt( g->eps(n) ) * k0;
+			dl = (n>1) ? g.d(n-1) : 0;
+			k[n] = sqrt( g.eps(n) ) * k0;
 			kz[n] = sqrt(k[n] * k[n] - kp * kp);
 			exp1 = exp(II * kz[n-1] * dl);
 			exp2 = exp(2. * II * kz[n-1] * dl);
-			reflTrans( g->eps(n-1), g->eps(n), kp/k0, pol, r, t );
+			reflTrans( g.eps(n-1), g.eps(n), kp/k0, pol, r, t );
 			
 			//std::cout << "[SMatrix]: " << m << " " << n << " " << r << " " << t 
 				//<< exp1 << " " << exp2 << " " << s[ind11(m,n-1)] << " " 
@@ -94,10 +93,10 @@ void SMatrix::initMatrix(const mlgeo *g) {
 		n = N;
 		eyeS(s,ind11(m,n));
 		for(m=N; m>1; --m) {  // m-1 is the new layer, from m
-			dl = (m>1) ? g->d(m-1) : 0;
+			dl = (m>1) ? g.d(m-1) : 0;
 			exp1 = exp(II*kz[m-1]*dl);
 			exp2 = exp(2.*II*kz[m-1]*dl);
-			reflTrans( g->eps(m), g->eps(m-1), kp/k0, pol, r, t );
+			reflTrans( g.eps(m), g.eps(m-1), kp/k0, pol, r, t );
 			
 			s[ind11(m-1,n)] = s[ind11(m,n)] * exp1 * (1. - r*r) /( t*(1.-r*s[ind21(m,n)]) );
 			s[ind12(m-1,n)] = s[ind12(m,n)] + r * s[ind11(m,n)] * s[ind22(m,n)] 
@@ -179,34 +178,3 @@ int ind21(int a, int b) {
 int ind22(int a, int b) {
 	return 4*(a+b)+3;
 }
-
-/*
-int main() {
-	// test Fresnel coefficients
-	cdouble rs, rp, ts, tp;
-	cdouble *epsA;
-	cdouble eps0 = 1.0;
-	cdouble eps1 = 3.5*3.5;
-	reflTrans(eps0, eps1, sin(M_PI/6.), 0, rs, ts);
-	reflTrans(eps0, eps1, sin(M_PI/6.), 1, rp, tp);
-	std::cout << "rs: " << rs << "\nrp: " << rp << "\nts: " 
-		<< ts << "\ntp: " << tp << "\n" << std::endl;
-
-	// test scattering matrix
-	double w = 2*M_PI*3e8/400e-9;
-	int noLayers = 5;
-	epsfn epsSi = [=] (double d) { return epsConst(d,cdouble(30.875,4.311)); };
-	epsfn eps[] = {epsVac, epsSi, epsVac, epsSi, epsVac};
-	epsA = new cdouble[noLayers];
-	for(int i=0; i<noLayers; ++i)
-		epsA[i] = eps[i](w);
-	double d[] = { 0.25e-6, 0.5e-6, 0.25e-6 };
-	mlgeo *g = new mlgeo;
-	initGeo(epsA, d, noLayers-1, g);
-	printGeo(g);	
-	SMatrix *S = new SMatrix(g, w/3.e8, w/3.e8*sqrt(21./25.));
-	//SMatrix *S = new SMatrix(epsA, d, noLayers-1,w/3.e8,w/3.e8*sqrt(21./25.));
-	S->printSMatrix();
-}
-*/
-
