@@ -1,6 +1,6 @@
 # MultilayerEM
 
-[Owen D. Miller](math.mit.edu/~odmiller)
+[Owen D. Miller](http://math.mit.edu/~odmiller)
  
 A set of c/c++ (more like c + classes) codes for a variety of electromagnetics computations for multilayer stacks of metals/dielectrics.  The code uses a stable scattering matrix computation, in contrast to the more typically used (and numerically unstable) transmission matrix formalism.  For a stack composed of arbitrarily many layers, one can compute:
 
@@ -34,8 +34,8 @@ in vacuum (in non-dimensional units, again).
 
 * *materials.cpp*: (NOT REQUIRED) Note that this is an auxiliary code I have provided.  It is a code I use with functions for common material models (in the infrared).  Users can specify permittivities however they see fit.
 
-* *numericalIntegration.cpp*: (NOT REQUIRED) This file provides functions to perform numerical integrations over wavevector and possible frequency.  It uses the [Cubature](ab-initio.mit.edu/wiki/index.php/Cubature) package
-written by [Steven G. Johnson](math.mit.edu/~stevenj)
+* *numericalIntegration.cpp*: (NOT REQUIRED) This file provides functions to perform numerical integrations over wavevector and possible frequency.  It uses the [Cubature](http://ab-initio.mit.edu/wiki/index.php/Cubature) package
+written by [Steven G. Johnson](http://math.mit.edu/~stevenj)
 
 * Many of the above have corresponding header files
 
